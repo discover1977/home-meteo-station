@@ -11,16 +11,11 @@
 
 #include "Wire.h"
 #include "SparkFunHTU21D.h"
-#include "SoftwareSerial.h"
 #include "Nextion.h"
-// #include "RTClib.h"
-#include "Time.h"
-
-#define DEBUG_DATE_TIME 	1
-
-//end of add your includes here
-
-//add your function definitions for the project A_Meteo here
+#include "DS3231.h"
+#include "SoftwareSerial.h"
+#include <avr/pgmspace.h>
+#include "SpiRam_Extended.h"
 
 //Do not add code below this line
 #endif /* _home_meteo_station_H_ */
