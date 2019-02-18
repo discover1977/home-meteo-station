@@ -1,6 +1,7 @@
 #include "home_meteo_station.h"
 
 #define SW_SERIAL_DEBUG		0
+#define TEST_SRAM			0
 
 #define CS_PIN				10
 
@@ -19,6 +20,37 @@ HTU21D htu;
 SpiRAM sram(SPI_CLOCK_DIV4, CS_PIN, CHIP_23LC1024);
 
 /* NEXTION ******************************************************************/
+enum PageNumber {
+	PageHome,
+	PageSettings,
+	PageSetTime,
+	PageSetDate,
+	PageInGraph,
+	PageOutGraph
+};
+// Page HOME (id 0)
+const char snTxtTempIn[] PROGMEM = "t_tempIn";
+const char snTxtHumIn[] PROGMEM = "t_humIn";
+const char snTxtCO2In[] PROGMEM = "t_CO2In";
+const char snTxtTVOCIn[] PROGMEM = "t_TVOCIn";
+const char snTxtTempOut[] PROGMEM = "t_tempOut";
+const char snTxtHumOut[] PROGMEM = "t_humOut";
+const char snTxtPressOut[] PROGMEM = "t_pressOut";
+const char snVarForecastID[] PROGMEM = "v_forecastID";
+const char snVarDayOfWeek[] PROGMEM = "var_DoWeek";
+const char snVarMonth[] PROGMEM = "var_Month";
+const char snWFHomePage[] PROGMEM = "wf_pageHome";
+
+// Page SETTINGS (id 1)
+
+// Page SET TIME (id 2)
+
+// Page SET DATE (id 3)
+
+// Page INDOOR GRAPH (id 4)
+
+// Page OUTDOOR GRAPH (id 5)
+
 /*
  * Register a button object to the touch event list.
  */
@@ -140,29 +172,30 @@ void setup()
 
 	sram.enable();
 
+#if(TEST_SRAM && SW_SERIAL_DEBUG)
 	uint8_t tmp = 0;
-
-	/*for(int i = 0; i < 26; i++) {
+	for(int i = 0; i < 5; i++) {
 		tmp = (uint8_t)rand();
-		sram_add_plot(TEMP_IN_ADDRESS_OFFSET, tmp);
+		sram_add_plot(TEMP_OUT_ADDRESS_OFFSET, tmp);
 		swSerial.print("SRAM write: "); swSerial.print(i); swSerial.print(" / "); swSerial.println(tmp);
 	}
 
 	for(int i = 0; i < WF_BUFFER_SIZE; i++) {
-		tmp = sram_read_plot(TEMP_IN_ADDRESS_OFFSET, i);
+		tmp = sram_read_plot(TEMP_OUT_ADDRESS_OFFSET, i);
 		swSerial.print("SRAM  read: "); swSerial.print(i); swSerial.print(" / "); swSerial.println(tmp);
 	}
 
-	for(int i = 0; i < 13; i++) {
+	/*for(int i = 0; i < 13; i++) {
 		tmp = (uint8_t)rand();
-		sram_add_plot(TEMP_IN_ADDRESS_OFFSET, tmp);
+		sram_add_plot(TEMP_OUT_ADDRESS_OFFSET, tmp);
 		swSerial.print("SRAM write: "); swSerial.print(i); swSerial.print(" / "); swSerial.println(tmp);
 	}
 
 	for(int i = 0; i < WF_BUFFER_SIZE; i++) {
-		tmp = sram_read_plot(TEMP_IN_ADDRESS_OFFSET, i);
+		tmp = sram_read_plot(TEMP_OUT_ADDRESS_OFFSET, i);
 		swSerial.print("SRAM  read: "); swSerial.print(i); swSerial.print(" / "); swSerial.println(tmp);
 	}*/
+#endif
 
 	nexInit();
 
