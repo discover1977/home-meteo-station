@@ -1,6 +1,6 @@
 #include "home_meteo_station.h"
 
-#define SW_SERIAL_DEBUG		1
+#define SW_SERIAL_DEBUG		0
 
 #define CS_PIN				10
 
@@ -142,7 +142,7 @@ void setup()
 
 	uint8_t tmp = 0;
 
-	for(int i = 0; i < 26; i++) {
+	/*for(int i = 0; i < 26; i++) {
 		tmp = (uint8_t)rand();
 		sram_add_plot(TEMP_IN_ADDRESS_OFFSET, tmp);
 		swSerial.print("SRAM write: "); swSerial.print(i); swSerial.print(" / "); swSerial.println(tmp);
@@ -162,7 +162,7 @@ void setup()
 	for(int i = 0; i < WF_BUFFER_SIZE; i++) {
 		tmp = sram_read_plot(TEMP_IN_ADDRESS_OFFSET, i);
 		swSerial.print("SRAM  read: "); swSerial.print(i); swSerial.print(" / "); swSerial.println(tmp);
-	}
+	}*/
 
 	nexInit();
 
