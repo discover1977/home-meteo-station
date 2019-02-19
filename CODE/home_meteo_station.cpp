@@ -418,5 +418,5 @@ void loop()
 		digitalWrite(LED_BUILTIN, LOW);
 	}
 
-	//nexLoop(nex_Listen_List);
+	nexLoop(nex_listen_list);
 }
