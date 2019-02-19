@@ -27,6 +27,15 @@ enum PageNumber {
 	PageInGraph,
 	PageOutGraph
 };
+
+enum WaveformID {
+	WFHomePage,
+	WFTempIn,
+	WFCO2In,
+	WFTVOC,
+	WFTempOut,
+	WFPressOut
+};
 // Page HOME (id 0)
 /* Time */
 const char snTxtHour[] PROGMEM = "t_Hour";
@@ -46,13 +55,21 @@ const char snTxtHumOut[] PROGMEM = "t_humOut";
 const char snTxtPressOut[] PROGMEM = "t_pressOut";
 const char snVarForecastID[] PROGMEM = "v_forecastID";
 /* Waveform */
-const char snWFHomePage[] PROGMEM = "wf_pageHome";
+const char snWFHomePage[] PROGMEM = "wf_pageHome";	// 8
 
 // Page SETTINGS (id 1)
 
 // Page SET TIME (id 2)
+NexButton nButSetTime = NexButton(PageSetTime, 8, "b_sT");
+const char snVarHour[] PROGMEM = "var_Hour";			// 9
+const char snVarMinute[] PROGMEM = "var_Minute";		// 10
 
 // Page SET DATE (id 3)
+NexButton nButSetDate = NexButton(PageSetTime, 7, "b_sD");
+const char snVarDatePSetDate[] PROGMEM = "var_date";			// 11
+const char snVarMonthPSetDate[] PROGMEM = "var_month";			// 12
+const char snVarYearPSetDate[] PROGMEM = "var_year";			// 13
+const char snVarDayOfWeekPSetDate[] PROGMEM = "var_DayOfWeek";	// 17
 
 // Page INDOOR GRAPH (id 4)
 
@@ -62,7 +79,8 @@ const char snWFHomePage[] PROGMEM = "wf_pageHome";
  * Register a button object to the touch event list.
  */
 NexTouch *nex_listen_list[] = {
-    //&b0,
+    &nButSetTime,
+	&nButSetDate,
     NULL
 };
 /****************************************************************** NEXTION */
@@ -104,6 +122,61 @@ struct lDateTime {
 	uint8_t Month;
 	uint8_t Year;
 } lDateTime;
+
+void sram_add_plot(uint16_t laddress_offset, uint8_t value) {
+	uint8_t AddrOffsetIndex = 0;
+	switch (laddress_offset) {
+		case TEMP_IN_ADDRESS_OFFSET: AddrOffsetIndex = 0; break;
+		case CO2_IN_ADDRESS_OFFSET: AddrOffsetIndex = 1; break;
+		case TVOC_IN_ADDRESS_OFFSET: AddrOffsetIndex = 2; break;
+		case TEMP_OUT_ADDRESS_OFFSET: AddrOffsetIndex = 3; break;
+		case PRESSURE_OUT_ADDRESS_OFFSET: AddrOffsetIndex = 4; break;
+		default: break;
+	}
+
+	sram.write_byte(SramAddr[AddrOffsetIndex], value);
+	if(++SramAddr[AddrOffsetIndex] == (TEMP_IN_ADDRESS_OFFSET + WF_BUFFER_SIZE)) {
+		SramAddr[AddrOffsetIndex] = TEMP_IN_ADDRESS_OFFSET;
+	}
+}
+
+uint8_t sram_read_plot(uint16_t laddress_offset, uint16_t index) {
+	uint8_t RetVal = 0;
+	uint8_t AddrOffsetIndex = 0;
+	switch (laddress_offset) {
+		case TEMP_IN_ADDRESS_OFFSET: AddrOffsetIndex = 0; break;
+		case CO2_IN_ADDRESS_OFFSET: AddrOffsetIndex = 1; break;
+		case TVOC_IN_ADDRESS_OFFSET: AddrOffsetIndex = 2; break;
+		case TEMP_OUT_ADDRESS_OFFSET: AddrOffsetIndex = 3; break;
+		case PRESSURE_OUT_ADDRESS_OFFSET: AddrOffsetIndex = 4; break;
+		default: break;
+	}
+
+	if((SramAddr[AddrOffsetIndex] + index) < (laddress_offset + WF_BUFFER_SIZE)) {
+		RetVal = sram.read_byte(SramAddr[AddrOffsetIndex] + index);
+	}
+	else {
+		RetVal = sram.read_byte((SramAddr[AddrOffsetIndex] + index) - WF_BUFFER_SIZE);
+	}
+
+	return RetVal;
+}
+
+void nSend_WFData(uint8_t wfID, uint16_t laddress_offset) {
+	char NameStr[15];
+	NexWaveform nWF = NexWaveform(PageHome, 8, NameStr);
+
+	switch (wfID) {
+		case WFHomePage : {
+			memcpy_P(NameStr, snWFHomePage, sizeof(snWFHomePage));
+			nWF = NexWaveform(PageHome, 8, NameStr);
+		} break;
+		default: break;
+	}
+	for(uint16_t i = 0; i < (laddress_offset + WF_BUFFER_SIZE); i++) {
+		nWF.addValue(0, sram_read_plot(laddress_offset, i));
+	}
+}
 
 void nSend_SensorData() {
 	char str[20];
@@ -147,7 +220,6 @@ void nSend_Time() {
 
 void nSend_Date() {
 	char str[20];
-
 	char NameStr[15];
 
 	memcpy_P(NameStr, snTxtYear, sizeof(snTxtYear));
@@ -169,43 +241,62 @@ void nSend_Date() {
 	nVarDayOfWeek.setValue(lDateTime.DayOfWeek);
 }
 
-void sram_add_plot(uint16_t laddress_offset, uint8_t value) {
-	uint8_t AddrOffsetIndex = 0;
-	switch (laddress_offset) {
-		case TEMP_IN_ADDRESS_OFFSET: AddrOffsetIndex = 0; break;
-		case CO2_IN_ADDRESS_OFFSET: AddrOffsetIndex = 1; break;
-		case TVOC_IN_ADDRESS_OFFSET: AddrOffsetIndex = 2; break;
-		case TEMP_OUT_ADDRESS_OFFSET: AddrOffsetIndex = 3; break;
-		case PRESSURE_OUT_ADDRESS_OFFSET: AddrOffsetIndex = 4; break;
-		default: break;
-	}
+void nSetTimeBut_PopCallback(void *ptr) {
+	uint32_t tmp;
+	char NameStr[15];
 
-	sram.write_byte(SramAddr[AddrOffsetIndex], value);
-	if(++SramAddr[AddrOffsetIndex] == (TEMP_IN_ADDRESS_OFFSET + WF_BUFFER_SIZE)) {
-		SramAddr[AddrOffsetIndex] = TEMP_IN_ADDRESS_OFFSET;
-	}
+	Flag.SetTime = true;
+
+	memcpy_P(NameStr, snVarHour, sizeof(snVarHour));
+	NexVariable nVarHour = NexVariable(PageSetTime, 9, NameStr);
+
+	memcpy_P(NameStr, snVarMinute, sizeof(snVarMinute));
+	NexVariable nVarMinute = NexVariable(PageSetTime, 10, "NameStr");
+
+	nVarHour.getValue(&tmp);
+	lDateTime.Hour = (uint8_t)tmp;
+	nVarMinute.getValue(&tmp);
+	lDateTime.Minute = (uint8_t)tmp;
+
+	rtc.setHour(lDateTime.Hour);
+	rtc.setHour(lDateTime.Minute);
+
+	Flag.SetTime = false;
+	Flag.ReadTime = true;
+	Flag.ForceReading = true;
 }
 
-uint8_t sram_read_plot(uint16_t laddress_offset, uint16_t index) {
-	uint8_t RetVal = 0;
-	uint8_t AddrOffsetIndex = 0;
-	switch (laddress_offset) {
-		case TEMP_IN_ADDRESS_OFFSET: AddrOffsetIndex = 0; break;
-		case CO2_IN_ADDRESS_OFFSET: AddrOffsetIndex = 1; break;
-		case TVOC_IN_ADDRESS_OFFSET: AddrOffsetIndex = 2; break;
-		case TEMP_OUT_ADDRESS_OFFSET: AddrOffsetIndex = 3; break;
-		case PRESSURE_OUT_ADDRESS_OFFSET: AddrOffsetIndex = 4; break;
-		default: break;
-	}
+void nSetDateBut_PopCallback(void *ptr) {
+	uint32_t tmp;
+	char NameStr[15];
 
-	if((SramAddr[AddrOffsetIndex] + index) < (laddress_offset + WF_BUFFER_SIZE)) {
-		RetVal = sram.read_byte(SramAddr[AddrOffsetIndex] + index);
-	}
-	else {
-		RetVal = sram.read_byte((SramAddr[AddrOffsetIndex] + index) - WF_BUFFER_SIZE);
-	}
+	Flag.SetTime = true;
 
-	return RetVal;
+	memcpy_P(NameStr, snVarDatePSetDate, sizeof(snVarDatePSetDate));
+	NexVariable nVarDate = NexVariable(PageSetDate, 11, NameStr);
+	memcpy_P(NameStr, snVarMonthPSetDate, sizeof(snVarMonthPSetDate));
+	NexVariable nVarMonth = NexVariable(PageSetDate, 12, NameStr);
+	memcpy_P(NameStr, snVarDayOfWeekPSetDate, sizeof(snVarDayOfWeekPSetDate));
+	NexVariable nVarDayOfWeek = NexVariable(PageSetDate, 17, NameStr);
+	memcpy_P(NameStr, snVarYearPSetDate, sizeof(snVarYearPSetDate));
+	NexVariable nVarYear = NexVariable(PageSetDate, 13, NameStr);
+
+	nVarDate.getValue(&tmp);
+	lDateTime.Date = (uint8_t)tmp;
+	nVarDayOfWeek.getValue(&tmp);
+	lDateTime.DayOfWeek = (uint8_t)tmp;
+	nVarMonth.getValue(&tmp);
+	lDateTime.Month = (uint8_t)tmp;
+	nVarYear.getValue(&tmp);
+	lDateTime.Year = (uint8_t)tmp;
+
+	rtc.setDate(lDateTime.Date);
+	rtc.setDoW(lDateTime.DayOfWeek);
+	rtc.setMonth(lDateTime.Month);
+	rtc.setDate(lDateTime.Year);
+
+	Flag.SetTime = false;
+	Flag.ReadDate = true;
 }
 
 void sram_init() {
@@ -278,8 +369,8 @@ void setup()
 	Flag.ForceReading = true;
 
 	// Nextion button attach PopCallback function
-	//nButtSetTime.attachPop(nSetTimeButt_PopCallback, &nButtSetTime);
-	//nButtSetDate.attachPop(nSetDateButt_PopCallback, &nButtSetDate);
+	nButSetTime.attachPop(nSetTimeBut_PopCallback, &nButSetTime);
+	nButSetDate.attachPop(nSetDateBut_PopCallback, &nButSetDate);
 
 	htu.begin();
 	rtc.enableOscillator(true, true, 0);
@@ -295,7 +386,7 @@ void loop()
 	if(Flag.ReadSensors) {
 		InDoorSensor.Temperature = htu.readTemperature();
 		InDoorSensor.Humidity = htu.readHumidity();
-		//InDoorSensor.CO2 = analogRead(A2);
+		InDoorSensor.CO2 = analogRead(A2);
 		nSend_SensorData();
 		Flag.ReadSensors = false;
 	}
