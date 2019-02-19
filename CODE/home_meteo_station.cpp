@@ -1,10 +1,9 @@
 #include "home_meteo_station.h"
 
-#define SW_SERIAL_DEBUG		0
-#define TEST_SRAM			0
+#define SW_SERIAL_DEBUG		1
+#define TEST_SRAM			1
 
 #define CS_PIN				10
-
 
 #define WF_BUFFER_SIZE					10
 #define TEMP_IN_ADDRESS_OFFSET			0
@@ -29,6 +28,15 @@ enum PageNumber {
 	PageOutGraph
 };
 // Page HOME (id 0)
+/* Time */
+const char snTxtHour[] PROGMEM = "t_Hour";
+const char snTxtMinute[] PROGMEM = "t_Minute";
+/* Date */
+const char snTxtDate[] PROGMEM = "t_Date";
+const char snTxtYear[] PROGMEM = "t_Year";
+const char snVarDayOfWeek[] PROGMEM = "var_DoWeek";
+const char snVarMonth[] PROGMEM = "var_Month";
+/* Sensors */
 const char snTxtTempIn[] PROGMEM = "t_tempIn";
 const char snTxtHumIn[] PROGMEM = "t_humIn";
 const char snTxtCO2In[] PROGMEM = "t_CO2In";
@@ -37,8 +45,7 @@ const char snTxtTempOut[] PROGMEM = "t_tempOut";
 const char snTxtHumOut[] PROGMEM = "t_humOut";
 const char snTxtPressOut[] PROGMEM = "t_pressOut";
 const char snVarForecastID[] PROGMEM = "v_forecastID";
-const char snVarDayOfWeek[] PROGMEM = "var_DoWeek";
-const char snVarMonth[] PROGMEM = "var_Month";
+/* Waveform */
 const char snWFHomePage[] PROGMEM = "wf_pageHome";
 
 // Page SETTINGS (id 1)
@@ -99,15 +106,67 @@ struct lDateTime {
 } lDateTime;
 
 void nSend_SensorData() {
+	char str[20];
+	char NameStr[15];
 
+	memcpy_P(NameStr, snTxtTempIn, sizeof(snTxtTempIn));
+	NexText nTxtTempIn(PageHome, 6, NameStr);
+	dtostrf(InDoorSensor.Temperature, 4, 1, str);
+	nTxtTempIn.setText(str);
+
+	memcpy_P(NameStr, snTxtHumIn, sizeof(snTxtHumIn));
+	NexText nTxtHumIn(PageHome, 7, NameStr);
+	dtostrf(InDoorSensor.Humidity, 4, 1, str);
+	nTxtHumIn.setText(str);
+
+	memcpy_P(NameStr, snTxtCO2In, sizeof(snTxtCO2In));
+	NexText nTxtCO2In(PageHome, 9, NameStr);
+	sprintf(str, "%4d", InDoorSensor.CO2);
+	nTxtCO2In.setText(str);
+
+	memcpy_P(NameStr, snTxtTVOCIn, sizeof(snTxtTVOCIn));
+	NexText nTxtTVOCIn(PageHome, 10, NameStr);
+	sprintf(str, "%4d", InDoorSensor.TVOC);
+	nTxtTVOCIn.setText(str);
 }
 
 void nSend_Time() {
+	char str[20];
+	char NameStr[15];
 
+	memcpy_P(NameStr, snTxtHour, sizeof(snTxtHour));
+	NexText nTxtHour(PageHome, 22, NameStr);
+	sprintf(str, "%d", lDateTime.Hour);
+	nTxtHour.setText(str);
+
+	memcpy_P(NameStr, snTxtMinute, sizeof(snTxtMinute));
+	NexText nTxtMinute(PageHome, 1, NameStr);
+	sprintf(str, "%02d", lDateTime.Minute);
+	nTxtMinute.setText(str);
 }
 
 void nSend_Date() {
+	char str[20];
 
+	char NameStr[15];
+
+	memcpy_P(NameStr, snTxtYear, sizeof(snTxtYear));
+	NexText nTxtYear(PageHome, 2, NameStr);
+	sprintf(str, "20%02d", lDateTime.Year);
+	nTxtYear.setText(str);
+
+	memcpy_P(NameStr, snTxtDate, sizeof(snTxtDate));
+	NexText nTxtDate(PageHome, 3, NameStr);
+	sprintf(str, "%d", lDateTime.Date);
+	nTxtDate.setText(str);
+
+	memcpy_P(NameStr, snVarMonth, sizeof(snVarMonth));
+	NexVariable nVarMonth(PageHome, 21, NameStr);
+	nVarMonth.setValue(lDateTime.Month);
+
+	memcpy_P(NameStr, snVarDayOfWeek, sizeof(snVarDayOfWeek));
+	NexVariable nVarDayOfWeek(PageHome, 21, NameStr);
+	nVarDayOfWeek.setValue(lDateTime.DayOfWeek);
 }
 
 void sram_add_plot(uint16_t laddress_offset, uint8_t value) {
@@ -149,6 +208,12 @@ uint8_t sram_read_plot(uint16_t laddress_offset, uint16_t index) {
 	return RetVal;
 }
 
+void sram_init() {
+	for(int i = TEMP_IN_ADDRESS_OFFSET; i < (PRESSURE_OUT_ADDRESS_OFFSET + WF_BUFFER_SIZE); i++) {
+		sram.write_byte(i, 0x00);
+	}
+}
+
 void int0_interrrupt() {
 	static uint8_t cnt = 0;
 
@@ -172,6 +237,8 @@ void setup()
 
 	sram.enable();
 
+	sram_init();
+
 #if(TEST_SRAM && SW_SERIAL_DEBUG)
 	uint8_t tmp = 0;
 	for(int i = 0; i < 5; i++) {
@@ -185,7 +252,7 @@ void setup()
 		swSerial.print("SRAM  read: "); swSerial.print(i); swSerial.print(" / "); swSerial.println(tmp);
 	}
 
-	/*for(int i = 0; i < 13; i++) {
+	for(int i = 0; i < 23; i++) {
 		tmp = (uint8_t)rand();
 		sram_add_plot(TEMP_OUT_ADDRESS_OFFSET, tmp);
 		swSerial.print("SRAM write: "); swSerial.print(i); swSerial.print(" / "); swSerial.println(tmp);
@@ -194,7 +261,7 @@ void setup()
 	for(int i = 0; i < WF_BUFFER_SIZE; i++) {
 		tmp = sram_read_plot(TEMP_OUT_ADDRESS_OFFSET, i);
 		swSerial.print("SRAM  read: "); swSerial.print(i); swSerial.print(" / "); swSerial.println(tmp);
-	}*/
+	}
 #endif
 
 	nexInit();
@@ -228,7 +295,7 @@ void loop()
 	if(Flag.ReadSensors) {
 		InDoorSensor.Temperature = htu.readTemperature();
 		InDoorSensor.Humidity = htu.readHumidity();
-		InDoorSensor.CO2 = analogRead(A2);
+		//InDoorSensor.CO2 = analogRead(A2);
 		nSend_SensorData();
 		Flag.ReadSensors = false;
 	}
