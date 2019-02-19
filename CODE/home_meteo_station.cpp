@@ -1,11 +1,11 @@
 #include "home_meteo_station.h"
 
-#define SW_SERIAL_DEBUG		1
-#define TEST_SRAM			1
+#define SW_SERIAL_DEBUG		0
+#define TEST_SRAM			0
 
 #define CS_PIN				10
 
-#define WF_BUFFER_SIZE					10
+#define WF_BUFFER_SIZE					240
 #define TEMP_IN_ADDRESS_OFFSET			0
 #define CO2_IN_ADDRESS_OFFSET			TEMP_IN_ADDRESS_OFFSET + WF_BUFFER_SIZE
 #define TVOC_IN_ADDRESS_OFFSET			CO2_IN_ADDRESS_OFFSET + WF_BUFFER_SIZE
@@ -37,6 +37,7 @@ enum WaveformID {
 	WFPressOut
 };
 // Page HOME (id 0)
+const char snPageHome[] PROGMEM = "pHome";
 /* Time */
 const char snTxtHour[] PROGMEM = "t_Hour";
 const char snTxtMinute[] PROGMEM = "t_Minute";
@@ -65,7 +66,7 @@ const char snVarHour[] PROGMEM = "var_Hour";			// 9
 const char snVarMinute[] PROGMEM = "var_Minute";		// 10
 
 // Page SET DATE (id 3)
-NexButton nButSetDate = NexButton(PageSetTime, 7, "b_sD");
+NexButton nButSetDate = NexButton(PageSetDate, 7, "b_sD");
 const char snVarDatePSetDate[] PROGMEM = "var_date";			// 11
 const char snVarMonthPSetDate[] PROGMEM = "var_month";			// 12
 const char snVarYearPSetDate[] PROGMEM = "var_year";			// 13
@@ -163,8 +164,8 @@ uint8_t sram_read_plot(uint16_t laddress_offset, uint16_t index) {
 }
 
 void nSend_WFData(uint8_t wfID, uint16_t laddress_offset) {
-	char NameStr[15];
-	NexWaveform nWF = NexWaveform(PageHome, 8, NameStr);
+	char NameStr[15] = {0};
+	NexWaveform nWF = NexWaveform(PageHome, 0, NameStr);
 
 	switch (wfID) {
 		case WFHomePage : {
@@ -173,8 +174,10 @@ void nSend_WFData(uint8_t wfID, uint16_t laddress_offset) {
 		} break;
 		default: break;
 	}
-	for(uint16_t i = 0; i < (laddress_offset + WF_BUFFER_SIZE); i++) {
-		nWF.addValue(0, sram_read_plot(laddress_offset, i));
+
+	for(uint16_t i = laddress_offset; i < (laddress_offset + WF_BUFFER_SIZE); i++) {
+		nWF.addValue(0, sram_read_plot(laddress_offset, i - laddress_offset));
+		_delay_ms(3);
 	}
 }
 
@@ -243,52 +246,65 @@ void nSend_Date() {
 
 void nSetTimeBut_PopCallback(void *ptr) {
 	uint32_t tmp;
-	char NameStr[15];
+	char NameStr[15] = {0};
 
 	Flag.SetTime = true;
 
 	memcpy_P(NameStr, snVarHour, sizeof(snVarHour));
 	NexVariable nVarHour = NexVariable(PageSetTime, 9, NameStr);
-
-	memcpy_P(NameStr, snVarMinute, sizeof(snVarMinute));
-	NexVariable nVarMinute = NexVariable(PageSetTime, 10, "NameStr");
-
 	nVarHour.getValue(&tmp);
 	lDateTime.Hour = (uint8_t)tmp;
+
+	memcpy_P(NameStr, snVarMinute, sizeof(snVarMinute));
+	NexVariable nVarMinute = NexVariable(PageSetTime, 10, NameStr);
 	nVarMinute.getValue(&tmp);
 	lDateTime.Minute = (uint8_t)tmp;
 
-	rtc.setHour(lDateTime.Hour);
-	rtc.setHour(lDateTime.Minute);
+	memcpy_P(NameStr, snPageHome, sizeof(snPageHome));
+	NexPage nPage = NexPage(0, 0, NameStr);
+	nPage.show();
 
-	Flag.SetTime = false;
+	rtc.setHour(lDateTime.Hour);
+	rtc.setMinute(lDateTime.Minute);
+
 	Flag.ReadTime = true;
 	Flag.ForceReading = true;
+	Flag.SetTime = false;
 }
 
 void nSetDateBut_PopCallback(void *ptr) {
 	uint32_t tmp;
-	char NameStr[15];
+	char NameStr[15] = {0};
 
 	Flag.SetTime = true;
 
 	memcpy_P(NameStr, snVarDatePSetDate, sizeof(snVarDatePSetDate));
 	NexVariable nVarDate = NexVariable(PageSetDate, 11, NameStr);
-	memcpy_P(NameStr, snVarMonthPSetDate, sizeof(snVarMonthPSetDate));
-	NexVariable nVarMonth = NexVariable(PageSetDate, 12, NameStr);
-	memcpy_P(NameStr, snVarDayOfWeekPSetDate, sizeof(snVarDayOfWeekPSetDate));
-	NexVariable nVarDayOfWeek = NexVariable(PageSetDate, 17, NameStr);
-	memcpy_P(NameStr, snVarYearPSetDate, sizeof(snVarYearPSetDate));
-	NexVariable nVarYear = NexVariable(PageSetDate, 13, NameStr);
-
 	nVarDate.getValue(&tmp);
 	lDateTime.Date = (uint8_t)tmp;
-	nVarDayOfWeek.getValue(&tmp);
-	lDateTime.DayOfWeek = (uint8_t)tmp;
+	swSerial.print("Set date: "); swSerial.println(lDateTime.Date);
+
+	memcpy_P(NameStr, snVarMonthPSetDate, sizeof(snVarMonthPSetDate));
+	NexVariable nVarMonth = NexVariable(PageSetDate, 12, NameStr);
 	nVarMonth.getValue(&tmp);
 	lDateTime.Month = (uint8_t)tmp;
+	swSerial.print("Set month: "); swSerial.println(lDateTime.Month);
+
+	memcpy_P(NameStr, snVarDayOfWeekPSetDate, sizeof(snVarDayOfWeekPSetDate));
+	NexVariable nVarDayOfWeek = NexVariable(PageSetDate, 17, NameStr);
+	nVarDayOfWeek.getValue(&tmp);
+	lDateTime.DayOfWeek = (uint8_t)tmp;
+	swSerial.print("Set day of week: "); swSerial.println(lDateTime.DayOfWeek);
+
+	memcpy_P(NameStr, snVarYearPSetDate, sizeof(snVarYearPSetDate));
+	NexVariable nVarYear = NexVariable(PageSetDate, 13, NameStr);
 	nVarYear.getValue(&tmp);
-	lDateTime.Year = (uint8_t)tmp;
+	lDateTime.Year = (uint8_t)tmp - 2000;
+	swSerial.print("Set year: "); swSerial.println(lDateTime.Year);
+
+	memcpy_P(NameStr, snPageHome, sizeof(snPageHome));
+	NexPage nPage = NexPage(0, 0, NameStr);
+	nPage.show();
 
 	rtc.setDate(lDateTime.Date);
 	rtc.setDoW(lDateTime.DayOfWeek);
@@ -312,7 +328,7 @@ void int0_interrrupt() {
 		Flag.ReadTime = true;
 	}
 
-	if(++cnt == 1) {
+	if(++cnt == 10) {
 		cnt = 0;
 		Flag.ReadSensors = true;
 	}
@@ -326,11 +342,27 @@ void setup()
 	swSerial.println("Start prog");
 #endif
 
+	nexInit();
+
 	sram.enable();
 
 	sram_init();
 
+	for(int i = 0; i < 240; i++) {
+		sram_add_plot(TEMP_IN_ADDRESS_OFFSET, map(i, 0, 239, 1, 60));
+	}
+
+	nSend_WFData(WFHomePage, TEMP_IN_ADDRESS_OFFSET);
+
+	/*NexWaveform nWF = NexWaveform(PageHome, 8, "wf_pageHome");
+
+	for(int i = 0; i < 60; i++) {
+		nWF.addValue(0, i);
+		_delay_ms(100);
+	}*/
+
 #if(TEST_SRAM && SW_SERIAL_DEBUG)
+
 	uint8_t tmp = 0;
 	for(int i = 0; i < 5; i++) {
 		tmp = (uint8_t)rand();
@@ -342,20 +374,7 @@ void setup()
 		tmp = sram_read_plot(TEMP_OUT_ADDRESS_OFFSET, i);
 		swSerial.print("SRAM  read: "); swSerial.print(i); swSerial.print(" / "); swSerial.println(tmp);
 	}
-
-	for(int i = 0; i < 23; i++) {
-		tmp = (uint8_t)rand();
-		sram_add_plot(TEMP_OUT_ADDRESS_OFFSET, tmp);
-		swSerial.print("SRAM write: "); swSerial.print(i); swSerial.print(" / "); swSerial.println(tmp);
-	}
-
-	for(int i = 0; i < WF_BUFFER_SIZE; i++) {
-		tmp = sram_read_plot(TEMP_OUT_ADDRESS_OFFSET, i);
-		swSerial.print("SRAM  read: "); swSerial.print(i); swSerial.print(" / "); swSerial.println(tmp);
-	}
 #endif
-
-	nexInit();
 
 	pinMode(A0, OUTPUT);
 	pinMode(A1, OUTPUT);
@@ -373,7 +392,7 @@ void setup()
 	nButSetDate.attachPop(nSetDateBut_PopCallback, &nButSetDate);
 
 	htu.begin();
-	rtc.enableOscillator(true, true, 0);
+	rtc.enableOscillator(true, false, 0);
 
 	attachInterrupt(0, int0_interrrupt, RISING);
 }
